@@ -13,7 +13,7 @@ plugin:
 
 cpp:
 	g++ -std=c++17 -O2 -c internal/cpp/engine.cpp -o internal/cpp/engine.o
- ar rcs internal/cpp/libengine.a internal/cpp/engine.o
+	ar rcs internal/cpp/libengine.a internal/cpp/engine.o
 
 run: build
 	./$(BINARY)
