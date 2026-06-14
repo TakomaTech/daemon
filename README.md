@@ -15,3 +15,33 @@ Features
 * and FL Studio like UI
 
 Dæmon is basically a Fruityloops clone. It is free and open source so that means everyone can use it to make music.
+
+Daemon prototype
+
+Build and run
+
+To build the Go application:
+
+```bash
+make build
+```
+
+To build example plugin:
+
+```bash
+make plugin
+```
+
+To build the C++ helper:
+
+```bash
+make cpp
+```
+
+To run:
+
+```bash
+make run
+```
+
+Project files use the .dmon extension
