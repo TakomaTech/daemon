@@ -1,6 +1,8 @@
 package core
 
 import (
+    "io"
+    "fmt"
     "math"
     "os"
     "path/filepath"
@@ -13,7 +15,8 @@ import (
 
 type Engine struct {
     ctx          *oto.Context
-    p            *oto.Player
+    p            oto.Player
+    pw           *io.PipeWriter
     running      bool
     mu           sync.Mutex
     plugins      []Plugin
@@ -37,10 +40,14 @@ type Plugin interface {
 }
 
 func NewEngine() *Engine {
-    ctx, _ := oto.NewContext(44100, 2, 2, 32768)
+    ctx, ready, err := oto.NewContext(44100, 2, 2)
+    if err != nil {
+        return &Engine{bpm: 120, sampleRate: 44100}
+    }
+    <-ready
     e := &Engine{ctx: ctx, bpm: 120, sampleRate: 44100}
     for i := 0; i < 6; i++ {
-        c := Channel{Name: "Chan" + string('1'+i), Volume: 0.8, Freq: 220.0 + float64(i)*110}
+        c := Channel{Name: fmt.Sprintf("Chan%d", i+1), Volume: 0.8, Freq: 220.0 + float64(i)*110}
         e.channels = append(e.channels, c)
     }
     return e
@@ -80,7 +87,9 @@ func (e *Engine) Play() {
         e.mu.Unlock()
         return
     }
-    e.p, _ = e.ctx.NewPlayer()
+    pr, pw := io.Pipe()
+    e.p = e.ctx.NewPlayer(pr)
+    e.pw = pw
     e.running = true
     e.mu.Unlock()
     go e.render()
@@ -93,7 +102,12 @@ func (e *Engine) Stop() {
         return
     }
     e.running = false
-    e.p.Close()
+    if e.p != nil {
+        e.p.Close()
+    }
+    if e.pw != nil {
+        e.pw.Close()
+    }
     e.mu.Unlock()
 }
 
@@ -134,7 +148,9 @@ func (e *Engine) render() {
                 e.stepIndex = (e.stepIndex + 1) % 16
             }
         }
-        e.p.Write(buf)
+        if e.pw != nil {
+            e.pw.Write(buf)
+        }
         time.Sleep(10 * time.Millisecond)
     }
 }

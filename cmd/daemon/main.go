@@ -10,7 +10,6 @@ import (
     "fyne.io/fyne/v2"
     "fyne.io/fyne/v2/app"
     "fyne.io/fyne/v2/container"
-    "fyne.io/fyne/v2/layout"
     "fyne.io/fyne/v2/widget"
 
     "github.com/Iconictacoma/daemon/internal/core"
@@ -85,7 +84,7 @@ func main() {
 
     left := container.NewBorder(container.NewHBox(playBtn, stopBtn, pianoBtn, tempoEntry, patternSelect), nil, nil, nil, container.NewVScroll(channelsRow))
     right := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(mixerCols))
-    content := container.New(layout.NewHSplitLayout(), left, right)
+    content := container.NewHSplit(left, right)
     w.SetContent(content)
     w.Resize(fyne.NewSize(1200, 800))
     go func() {
