@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <ProjectGuid>{F5D9E8C1-4B2A-4D6F-9E3C-1A2B3C4D5E6F}</ProjectGuid>
+    <ProjectVersion>19.0</ProjectVersion>
+    <FrameworkType>FMX</FrameworkType>
+    <MainSource>DaemonUI.dpr</MainSource>
+    <Base>True</Base>
+    <Config Condition="'$(Config)'==''">Debug</Config>
+    <Platform Condition="'$(Platform)'==''">Win64</Platform>
+    <TargetedPlatforms>3</TargetedPlatforms>
+    <AppType>GUI</AppType>
+    <Title>Daemon UI</Title>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Base' or '$(Config)'==''">
+    <DCC_Optimize>False</DCC_Optimize>
+    <DCC_DebugInfoInExe>True</DCC_DebugInfoInExe>
+    <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
+    <DCC_UsePackage>bindingengine;CloudService;CustomIPTransport;dbexpress;DBXCommon;DBXInterBase;DBXMySQLMetaData;DBXMySql;dsnap;dsnapcon;DynamicsBaseService;FireDAC;FireDACCommon;FireDACCommonDriver;FireDACSQLite;fmxase;fmxbde;fmxcems;fmxcloudservice;fmxdb;fmxdatasnap;fmxdesignformidde;FMXDxUG;fmxmapcontrol;fmxmapcontrolidde;fmxobj;fmxprojmanager;fmxserver;fmxui;fmxuitls;FMXWebDesign;FormBuilder;ibmonitor;ibserver;IndyCore;IndyIPClient;IndyIPCommon;IndyIPServer;IndyProtocols;IndySystem;IndyWinSocket;inet;inetdbxpress;InterBaseAPI;InterBaseDriver;IOUtils;LibTiff;LinkVerifieriDE;objectsdb;RadStudioIDEPluginHost;rtl;soaprtl;svnui;tethering;TetherPlug;UBindingComponents;VCLComps;vclib;vclimg;vclshlctls;vclstm;Visualizer;webdsnap;wer;WinInetAPI;xmlrtl;$(DCC_UsePackage)</DCC_UsePackage>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Debug'">
+    <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+  </PropertyGroup>
+  <ItemGroup>
+    <DelphiCompile Include="DaemonUI.dpr">
+      <MainSource>MainSource</MainSource>
+    </DelphiCompile>
+    <DCCReference Include="Forms\MainForm.pas" />
+    <DCCReference Include="Forms\PlaylistForm.pas" />
+    <DCCReference Include="Components\SequencerPanel.pas" />
+    <DCCReference Include="Components\ChannelPanel.pas" />
+    <DCCReference Include="Utils\StyleManager.pas" />
+  </ItemGroup>
+  <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" />
+</Project>

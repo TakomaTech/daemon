@@ -1,0 +1,218 @@
+// MainForm.fmx - Visual Form Definition for FireMonkey
+// This XML describes the visual layout of the main application window
+
+object frmMain: TfrmMain
+  Left = 0
+  Top = 0
+  ClientWidth = 1280
+  ClientHeight = 800
+  StyleBook = 'FLStudioDarkTheme'
+  Title = 'Daemon - FL Studio-style DAW'
+  
+  // Main container
+  object pnlMain: TPanel
+    Align = Client
+    Fill.Color = $FF212121
+    
+    // Top Toolbar
+    object pnlToolbar: TPanel
+      Align = Top
+      Height = 60
+      Fill.Color = $FF303030
+      StrokeSettings.Color = $FF404040
+      StrokeSettings.Thickness = 1
+      
+      // Logo
+      object imgLogo: TImage
+        Align = Left
+        Width = 55
+        Height = 55
+        WrapMode = Fit
+        Margins.Left = 5
+        Margins.Top = 2
+        Margins.Right = 10
+        Margins.Bottom = 2
+        // Source: images/daemonlogo02.png
+      end
+      
+      // App Title
+      object lblAppName: TLabel
+        Align = Left
+        Width = 350
+        Text = 'DAEMON - FL Studio-style DAW'
+        Font.Size = 18
+        Font.Style = [fsBold]
+        TextSettings.FontColor = $FF00BFFF
+        VerticalAlign = Center
+      end
+      
+      // Transport Controls
+      object btnPlay: TButton
+        Align = Right
+        Width = 80
+        Height = 50
+        Text = '▶ Play'
+        TextSettings.FontColor = $FFFFFFFF
+        Margins.Right = 5
+        Margins.Top = 5
+        Margins.Bottom = 5
+        StrokeSettings.Color = $FF404040
+      end
+      
+      object btnStop: TButton
+        Align = Right
+        Width = 80
+        Height = 50
+        Text = '⏹ Stop'
+        TextSettings.FontColor = $FFFFFFFF
+        Margins.Right = 5
+        Margins.Top = 5
+        Margins.Bottom = 5
+      end
+      
+      object btnRecord: TButton
+        Align = Right
+        Width = 80
+        Height = 50
+        Text = '● Record'
+        TextSettings.FontColor = $FFFFFFFF
+        Margins.Right = 5
+        Margins.Top = 5
+        Margins.Bottom = 5
+      end
+    end
+    
+    // Main content area
+    object pnlContent: TPanel
+      Align = Client
+      Fill.Color = $FF212121
+      
+      // Left Playlist Panel
+      object pnlPlaylist: TPanel
+        Align = Left
+        Width = 200
+        Fill.Color = $FF212121
+        StrokeSettings.Color = $FF404040
+        StrokeSettings.Thickness = 1
+        StrokeSettings.Kind = Dash
+        
+        // Playlist Label
+        object lblPlaylist: TLabel
+          Align = Top
+          Height = 30
+          Text = 'PLAYLIST'
+          Font.Size = 14
+          Font.Style = [fsBold]
+          TextSettings.FontColor = $FF00BFFF
+          VerticalAlign = Center
+          Padding.Left = 10
+          Padding.Top = 5
+        end
+        
+        // Add Track Button
+        object btnNewTrack: TButton
+          Align = Top
+          Height = 40
+          Text = '+ Add Track'
+          TextSettings.FontColor = $FF00BFFF
+          Margins.All = 5
+        end
+        
+        // Playlist Items
+        object lstPlaylist: TListBox
+          Align = Client
+          Fill.Color = $FF303030
+          ItemHeight = 25
+          ShowCheckboxes = False
+          DisableFocusEffect = False
+          // Populated at runtime
+        end
+      end
+      
+      // Center Sequencer Panel
+      object pnlSequencer: TPanel
+        Align = Client
+        Fill.Color = $FF303030
+        StrokeSettings.Color = $FF404040
+        StrokeSettings.Thickness = 1
+        
+        // Step Grid
+        object pnlStepGrid: TPanel
+          Align = Top
+          Height = 300
+          Fill.Color = $FF212121
+          
+          // 16x8 Step Grid (created at runtime)
+          // Each cell is 32x32 pixels with 2px padding
+          // Total: 16 steps * 34px = 544px wide
+          //        8 channels * 34px = 272px tall
+        end
+      end
+      
+      // Right Channel Mixer
+      object pnlChannels: TPanel
+        Align = Right
+        Width = 160
+        Fill.Color = $FF212121
+        StrokeSettings.Color = $FF404040
+        StrokeSettings.Thickness = 1
+        StrokeSettings.Kind = Dash
+        
+        // Scrollable channel list (created at runtime)
+        object sbxChannels: TScrollBox
+          Align = Client
+          ShowScrollBars = sbVertical
+          
+          object pnlChannelContainer: TPanel
+            Align = Top
+            Fill.Color = $FF212121
+            // 8 Channel panels added here at runtime
+          end
+        end
+      end
+    end
+  end
+  
+  // Menu Bar (created at runtime)
+  object MainMenu: TMainMenu
+    object mitFile: TMenuItem
+      Text = '&File'
+      object mitNew: TMenuItem
+        Text = '&New'
+        ShortCut = 16462
+      end
+      object mitOpen: TMenuItem
+        Text = '&Open'
+        ShortCut = 16463
+      end
+      object mitSave: TMenuItem
+        Text = '&Save'
+        ShortCut = 16467
+      end
+      object mitSep1: TMenuItem
+        Text = '-'
+      end
+      object mitExit: TMenuItem
+        Text = 'E&xit'
+        ShortCut = 18176
+      end
+    end
+    object mitEdit: TMenuItem
+      Text = '&Edit'
+      object mitUndo: TMenuItem
+        Text = '&Undo'
+        ShortCut = 16474
+      end
+      object mitRedo: TMenuItem
+        Text = '&Redo'
+        ShortCut = 16457
+      end
+    end
+    object mitHelp: TMenuItem
+      Text = '&Help'
+      object mitAbout: TMenuItem
+        Text = '&About'
+      end
+    end
+  end
+end
