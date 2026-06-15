@@ -1,9 +1,7 @@
 package main
 
 import (
-    "encoding/json"
-    "io/ioutil"
-    "os"
+    "fmt"
     "strconv"
     "time"
 
@@ -15,101 +13,193 @@ import (
     "github.com/Iconictacoma/daemon/internal/core"
 )
 
-type Project struct {
-    Name  string `json:"name"`
-    Tempo int    `json:"tempo"`
+const stepCount = 16
+
+var pianoKeyNames = []string{
+    "C4", "C#4", "D4", "D#4", "E4", "F4", "F#4", "G4", "G#4", "A4", "A#4", "B4",
 }
 
-func makeStepGrid(e *core.Engine, chIdx int) *fyne.Container {
-    grid := container.NewGridWithColumns(16)
-    for s := 0; s < 16; s++ {
-        idx := s
-        btn := widget.NewButton(".", func() {
-            e.ToggleStep(chIdx, idx)
+func makeStepGrid(e *core.Engine, chIdx int, buttons [][]*widget.Button) *fyne.Container {
+    grid := container.NewGridWithColumns(stepCount)
+    for s := 0; s < stepCount; s++ {
+        step := s
+        var btn *widget.Button
+        btn = widget.NewButton(".", func() {
+            active := !e.GetStep(chIdx, step)
+            e.SetStep(chIdx, step, active)
+            if active {
+                btn.SetText("●")
+            } else {
+                btn.SetText(".")
+            }
         })
+        buttons[chIdx][step] = btn
         grid.Add(btn)
     }
     return grid
 }
 
-func makeChannelColumn(e *core.Engine, chIdx int) *fyne.Container {
-    lbl := widget.NewLabel("Chan")
+func makeChannelColumn(e *core.Engine, chIdx int, buttons [][]*widget.Button, refresh func()) *fyne.Container {
+    label := widget.NewLabel(fmt.Sprintf("Chan %d", chIdx+1))
     vol := widget.NewSlider(0, 1)
-    vol.Value = 0.8
-    vol.OnChanged = func(v float64) { e.SetChannelVol(chIdx, float32(v)) }
-    grid := makeStepGrid(e, chIdx)
-    col := container.NewVBox(lbl, vol, grid)
-    return col
+    vol.Step = 0.01
+    vol.Value = float64(e.GetChannelVol(chIdx))
+    vol.OnChanged = func(v float64) {
+        e.SetChannelVol(chIdx, float32(v))
+    }
+    mute := widget.NewButton("Mute", func() {
+        e.MuteChannel(chIdx, !e.IsChannelMuted(chIdx))
+        refresh()
+    })
+    grid := makeStepGrid(e, chIdx, buttons)
+    return container.NewVBox(label, vol, mute, grid)
 }
 
-func openPianoRoll(a fyne.App) {
+func openPianoRoll(a fyne.App, e *core.Engine) {
     w := a.NewWindow("Piano Roll")
-    g := widget.NewLabel("Piano roll editor placeholder")
-    w.SetContent(container.NewCenter(g))
-    w.Resize(fyne.NewSize(800, 400))
+    rows := container.NewVBox()
+    for key := range pianoKeyNames {
+        row := container.NewHBox(widget.NewLabel(pianoKeyNames[key]))
+        for step := 0; step < stepCount; step++ {
+            keyIdx := key
+            stepIdx := step
+            var btn *widget.Button
+            btn = widget.NewButton(".", func() {
+                active := !e.GetPianoNoteState(keyIdx, stepIdx)
+                e.SetPianoNoteState(keyIdx, stepIdx, active)
+                if active {
+                    btn.SetText("●")
+                } else {
+                    btn.SetText(".")
+                }
+            })
+            if e.GetPianoNoteState(key, step) {
+                btn.SetText("●")
+            }
+            row.Add(btn)
+        }
+        rows.Add(row)
+    }
+    w.SetContent(container.NewVScroll(rows))
+    w.Resize(fyne.NewSize(1200, 520))
     w.Show()
+}
+
+func refreshPatternGrid(e *core.Engine, buttons [][]*widget.Button, patternSelect *widget.Select, tempoEntry *widget.Entry, statusLabel *widget.Label) {
+    options := e.PatternNames()
+    patternSelect.Options = options
+    patternSelect.Refresh()
+    patternSelect.SetSelected(e.CurrentPatternName())
+    for ch := 0; ch < len(buttons); ch++ {
+        for step := 0; step < stepCount; step++ {
+            if buttons[ch][step] == nil {
+                continue
+            }
+            if e.GetStep(ch, step) {
+                buttons[ch][step].SetText("●")
+            } else {
+                buttons[ch][step].SetText(".")
+            }
+        }
+    }
+    tempoEntry.SetText(strconv.Itoa(e.Tempo()))
+    statusLabel.SetText(fmt.Sprintf("Pattern %s • BPM %d", e.CurrentPatternName(), e.Tempo()))
 }
 
 func main() {
     a := app.New()
     w := a.NewWindow("Daemon")
     engine := core.NewEngine()
-    playBtn := widget.NewButton("Play", func() { engine.Play() })
-    stopBtn := widget.NewButton("Stop", func() { engine.Stop() })
-    pianoBtn := widget.NewButton("Piano Roll", func() { openPianoRoll(a) })
+    engine.LoadPlugins("plugins")
+    patternButtons := make([][]*widget.Button, engine.ChannelCount())
+    for i := range patternButtons {
+        patternButtons[i] = make([]*widget.Button, stepCount)
+    }
+    statusLabel := widget.NewLabel("")
     tempoEntry := widget.NewEntry()
-    tempoEntry.SetText("120")
+    tempoEntry.SetText(strconv.Itoa(engine.Tempo()))
+    var playBtn *widget.Button
+    recordBtn := widget.NewButton("Record", func() {})
+    patternSelect := widget.NewSelect(engine.PatternNames(), func(s string) {
+        engine.SetPatternByName(s)
+    })
+    patternSelect.SetSelected(engine.CurrentPatternName())
+    playBtn = widget.NewButton("Play", func() {
+        if engine.IsPlaying() {
+            engine.Stop()
+            playBtn.SetText("Play")
+        } else {
+            engine.Play()
+            playBtn.SetText("Pause")
+        }
+    })
+    stopBtn := widget.NewButton("Stop", func() {
+        engine.Stop()
+        playBtn.SetText("Play")
+        refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel)
+    })
+    recordBtn = widget.NewButton("Record", func() {
+        if engine.IsRecording() {
+            engine.StopRecording()
+            recordBtn.SetText("Record")
+            statusLabel.SetText("Recording stopped")
+        } else {
+            err := engine.StartRecording("session.wav")
+            if err != nil {
+                statusLabel.SetText(err.Error())
+                return
+            }
+            recordBtn.SetText("Recording")
+            statusLabel.SetText("Recording started")
+        }
+    })
     tempoEntry.OnChanged = func(t string) {
         if v, err := strconv.Atoi(t); err == nil {
             engine.SetTempo(v)
         }
     }
-
-    patternSelect := widget.NewSelect([]string{"Pattern 1", "Pattern 2"}, func(s string) {})
-
-    channelsRow := container.NewHBox()
-    for i := 0; i < 6; i++ {
-        col := makeChannelColumn(engine, i)
-        channelsRow.Add(col)
-    }
-
-    mixerCols := container.NewVBox()
-    for i := 0; i < 6; i++ {
-        s := widget.NewSlider(0, 1)
-        s.Value = 0.8
-        idx := i
-        s.OnChanged = func(v float64) { engine.SetChannelVol(idx, float32(v)) }
-        mixerCols.Add(s)
-    }
-
-    left := container.NewBorder(container.NewHBox(playBtn, stopBtn, pianoBtn, tempoEntry, patternSelect), nil, nil, nil, container.NewVScroll(channelsRow))
-    right := container.NewBorder(nil, nil, nil, nil, container.NewVScroll(mixerCols))
-    content := container.NewHSplit(left, right)
-    w.SetContent(content)
-    w.Resize(fyne.NewSize(1200, 800))
-    go func() {
-        for {
-            engine.Tick()
-            time.Sleep(10 * time.Millisecond)
-        }
-    }()
+    newPatternBtn := widget.NewButton("New Pattern", func() {
+        engine.AddPattern(fmt.Sprintf("Pattern %d", engine.PatternCount()+1))
+        refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel)
+    })
     saveBtn := widget.NewButton("Save .dmon", func() {
-        p := Project{Name: "New Project", Tempo: 120}
-        data, _ := json.Marshal(p)
-        ioutil.WriteFile("project.dmon", data, 0644)
+        if err := engine.SaveProject("project.dmon"); err != nil {
+            statusLabel.SetText(err.Error())
+            return
+        }
+        statusLabel.SetText("Saved project.dmon")
     })
     loadBtn := widget.NewButton("Load .dmon", func() {
-        path := "project.dmon"
-        if _, err := os.Stat(path); err == nil {
-            b, _ := ioutil.ReadFile(path)
-            var p Project
-            json.Unmarshal(b, &p)
-            _ = p
+        if err := engine.LoadProject("project.dmon"); err != nil {
+            statusLabel.SetText(err.Error())
+            return
         }
+        refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel)
+        statusLabel.SetText("Loaded project.dmon")
     })
-    menu := container.NewHBox(saveBtn, loadBtn)
-    w.SetMainMenu(nil)
-    w.SetContent(container.NewVBox(menu, content))
+    channelColumns := container.NewHBox()
+    for ch := 0; ch < engine.ChannelCount(); ch++ {
+        channelColumns.Add(makeChannelColumn(engine, ch, patternButtons, func() {
+            refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel)
+        }))
+    }
+    pianoBtn := widget.NewButton("Piano Roll", func() {
+        openPianoRoll(a, engine)
+    })
+    toolbar := container.NewHBox(playBtn, stopBtn, recordBtn, tempoEntry, patternSelect)
+    actions := container.NewHBox(saveBtn, loadBtn, newPatternBtn, pianoBtn)
+    left := container.NewBorder(toolbar, actions, nil, nil, container.NewVScroll(channelColumns))
+    right := container.NewVBox(widget.NewLabel("Status"), statusLabel)
+    content := container.NewHSplit(left, right)
+    w.SetContent(content)
+    w.Resize(fyne.NewSize(1400, 900))
+    refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel)
+    go func() {
+        ticker := time.NewTicker(300 * time.Millisecond)
+        for range ticker.C {
+            refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel)
+        }
+    }()
     w.ShowAndRun()
 }
 
