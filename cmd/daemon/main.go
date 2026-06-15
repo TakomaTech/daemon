@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -9,14 +10,12 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
-	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/Iconictacoma/daemon/internal/core"
@@ -70,18 +69,19 @@ func openPianoRoll(a fyne.App, e *core.Engine) {
 	for keyIdx, keyName := range pianoKeyNames {
 		row := container.NewHBox(widget.NewLabel(keyName))
 		for step := 0; step < stepCount; step++ {
+			key := keyIdx
 			stepIdx := step
 			var btn *widget.Button
 			btn = widget.NewButton(".", func() {
-				active := !e.GetPianoNoteState(keyIdx, stepIdx)
-				e.SetPianoNoteState(keyIdx, stepIdx, active)
+				active := !e.GetPianoNoteState(key, stepIdx)
+				e.SetPianoNoteState(key, stepIdx, active)
 				if active {
 					btn.SetText("●")
 				} else {
 					btn.SetText(".")
 				}
 			})
-			if e.GetPianoNoteState(keyIdx, stepIdx) {
+			if e.GetPianoNoteState(key, stepIdx) {
 				btn.SetText("●")
 			}
 			row.Add(btn)
@@ -156,12 +156,19 @@ func saveProjectDialog(w fyne.Window, engine *core.Engine, statusLabel *widget.L
 		}
 		path := writeCloser.URI().Path()
 		writeCloser.Close()
-		if !strings.HasSuffix(strings.ToLower(path), ".dmon") {
-			path += ".dmon"
-		}
-		if err := engine.SaveProject(path); err != nil {
-			statusLabel.SetText(err.Error())
-			return
+		if !strings.EqualFold(filepath.Ext(path), ".dmon") {
+			newPath := path + ".dmon"
+			if err := engine.SaveProject(newPath); err != nil {
+				statusLabel.SetText(err.Error())
+				return
+			}
+			_ = os.Remove(path)
+			path = newPath
+		} else {
+			if err := engine.SaveProject(path); err != nil {
+				statusLabel.SetText(err.Error())
+				return
+			}
 		}
 		engine.AddRecentProject(path)
 		_ = engine.SaveWorkspace()
@@ -179,12 +186,17 @@ func loadProjectDialog(w fyne.Window, engine *core.Engine, statusLabel *widget.L
 		if err != nil || readCloser == nil {
 			return
 		}
-		path := readCloser.URI().Path()
+		data, err := io.ReadAll(readCloser)
 		readCloser.Close()
-		if err := engine.LoadProject(path); err != nil {
+		if err != nil {
 			statusLabel.SetText(err.Error())
 			return
 		}
+		if err := engine.LoadProjectFromBytes(data); err != nil {
+			statusLabel.SetText(err.Error())
+			return
+		}
+		path := readCloser.URI().Path()
 		engine.AddRecentProject(path)
 		_ = engine.SaveWorkspace()
 		statusLabel.SetText("Loaded " + path)
@@ -220,16 +232,18 @@ func refreshPatternGrid(e *core.Engine, buttons [][]*widget.Button, patternSelec
 
 func main() {
 	headless := os.Getenv("DAEMON_HEADLESS") == "1"
-	var a fyne.App
-	if headless {
-		a = test.NewApp()
-	} else {
-		a = app.New()
-	}
-	w := a.NewWindow("Daemon")
 	engine := core.NewEngine()
 	_ = engine.LoadWorkspace()
 	engine.LoadPlugins(pluginDir())
+	if headless {
+		log.Println("Daemon running in headless mode. Press Ctrl+C to exit.")
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		return
+	}
+	a := app.New()
+	w := a.NewWindow("Daemon")
 	patternButtons := make([][]*widget.Button, engine.ChannelCount())
 	for i := range patternButtons {
 		patternButtons[i] = make([]*widget.Button, stepCount)
@@ -345,20 +359,6 @@ func main() {
 	w.SetContent(content)
 	w.Resize(fyne.NewSize(1400, 900))
 	refreshUI()
-	go func() {
-		ticker := time.NewTicker(300 * time.Millisecond)
-		for range ticker.C {
-			refreshUI()
-		}
-	}()
-
-	if headless {
-		log.Println("Daemon running in headless mode. Press Ctrl+C to exit.")
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
-		return
-	}
 
 	w.ShowAndRun()
 }

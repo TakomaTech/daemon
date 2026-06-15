@@ -657,40 +657,42 @@ func (e *Engine) LoadProject(path string) error {
     if err != nil {
         return err
     }
-    var proj Project
-    if err := json.Unmarshal(data, &proj); err != nil {
-        return err
-    }
-    e.mu.Lock()
-    e.projectName = proj.Name
-    e.bpm = proj.Tempo
-    e.currentPattern = proj.CurrentPattern
-    if len(proj.Channels) > 0 {
-        e.channels = proj.Channels
-    }
-    if len(proj.Patterns) > 0 {
-        e.patterns = proj.Patterns
-    }
-    if len(proj.PianoRoll.Notes) > 0 {
-        e.pianoRoll = proj.PianoRoll
-    }
-    for len(e.channelPhases) < len(e.channels) {
-        e.channelPhases = append(e.channelPhases, 0)
-    }
-    for i := range e.patterns {
-        if len(e.patterns[i].Steps) < len(e.channels) {
-            for len(e.patterns[i].Steps) < len(e.channels) {
-                e.patterns[i].Steps = append(e.patterns[i].Steps, make([]bool, stepCount))
-            }
-        }
-    }
-    if len(e.pianoPhases) < len(e.pianoRoll.Notes) {
-        for len(e.pianoPhases) < len(e.pianoRoll.Notes) {
-            e.pianoPhases = append(e.pianoPhases, 0)
-        }
-    }
-    e.mu.Unlock()
-    return nil
+	return e.LoadProjectFromBytes(data)
+}
+
+func (e *Engine) LoadProjectFromBytes(data []byte) error {
+	var proj Project
+	if err := json.Unmarshal(data, &proj); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	e.projectName = proj.Name
+	e.bpm = proj.Tempo
+	e.currentPattern = proj.CurrentPattern
+	if len(proj.Channels) > 0 {
+		e.channels = proj.Channels
+	}
+	if len(proj.Patterns) > 0 {
+		e.patterns = proj.Patterns
+	}
+	if len(proj.PianoRoll.Notes) > 0 {
+		e.pianoRoll = proj.PianoRoll
+	}
+	for len(e.channelPhases) < len(e.channels) {
+		e.channelPhases = append(e.channelPhases, 0)
+	}
+	for i := range e.patterns {
+		if len(e.patterns[i].Steps) < len(e.channels) {
+			for len(e.patterns[i].Steps) < len(e.channels) {
+				e.patterns[i].Steps = append(e.patterns[i].Steps, make([]bool, stepCount))
+			}
+		}
+	}
+	for len(e.pianoPhases) < len(e.pianoRoll.Notes) {
+		e.pianoPhases = append(e.pianoPhases, 0)
+	}
+	e.mu.Unlock()
+	return nil
 }
 
 func (e *Engine) LoadPlugins(dir string) {
