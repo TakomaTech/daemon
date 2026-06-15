@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -90,6 +91,32 @@ func openPianoRoll(a fyne.App, e *core.Engine) {
 	w.SetContent(container.NewVScroll(rows))
 	w.Resize(fyne.NewSize(1200, 520))
 	w.Show()
+}
+
+func pluginDir() string {
+	if env := os.Getenv("DAEMON_PLUGIN_DIR"); env != "" {
+		return env
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates := []string{
+			filepath.Join(exeDir, "plugins"),
+			filepath.Join(exeDir, "..", "lib", "daemon", "plugins"),
+			filepath.Join(exeDir, "..", "..", "lib", "daemon", "plugins"),
+		}
+		for _, p := range candidates {
+			if info, err := os.Stat(p); err == nil && info.IsDir() {
+				return p
+			}
+		}
+	}
+	if info, err := os.Stat("/usr/local/lib/daemon/plugins"); err == nil && info.IsDir() {
+		return "/usr/local/lib/daemon/plugins"
+	}
+	if info, err := os.Stat("/usr/lib/daemon/plugins"); err == nil && info.IsDir() {
+		return "/usr/lib/daemon/plugins"
+	}
+	return "plugins"
 }
 
 func pluginListText(engine *core.Engine) string {
@@ -202,7 +229,7 @@ func main() {
 	w := a.NewWindow("Daemon")
 	engine := core.NewEngine()
 	_ = engine.LoadWorkspace()
-	engine.LoadPlugins("plugins")
+	engine.LoadPlugins(pluginDir())
 	patternButtons := make([][]*widget.Button, engine.ChannelCount())
 	for i := range patternButtons {
 		patternButtons[i] = make([]*widget.Button, stepCount)

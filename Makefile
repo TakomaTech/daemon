@@ -15,6 +15,12 @@ cpp:
 	g++ -std=c++17 -O2 -c internal/cpp/engine.cpp -o internal/cpp/engine.o
 	ar rcs internal/cpp/libengine.a internal/cpp/engine.o
 
+install: build plugin
+	install -d $(DESTDIR)/usr/local/bin
+	install -m 755 $(BINARY) $(DESTDIR)/usr/local/bin/$(BINARY)
+	install -d $(DESTDIR)/usr/local/lib/daemon/plugins
+	install -m 644 plugins/example.so $(DESTDIR)/usr/local/lib/daemon/plugins/
+
 run: build
 	./$(BINARY)
 
