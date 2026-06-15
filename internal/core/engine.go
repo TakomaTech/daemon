@@ -621,6 +621,7 @@ func (e *Engine) LoadPlugins(dir string) {
             if proc, ok := sym.(func([]float32) []float32); ok {
                 e.mu.Lock()
                 e.plugins = append(e.plugins, PluginFunc(proc))
+                e.pluginFiles = append(e.pluginFiles, f.Name())
                 e.mu.Unlock()
             }
         }
