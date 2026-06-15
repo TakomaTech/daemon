@@ -93,11 +93,33 @@ func openPianoRoll(a fyne.App, e *core.Engine) {
 }
 
 func pluginListText(engine *core.Engine) string {
-	names := engine.PluginNames()
-	if len(names) == 0 {
+	infos := engine.PluginInfos()
+	if len(infos) == 0 {
 		return "Plugins: none"
 	}
-	return "Plugins:\n" + strings.Join(names, "\n")
+	lines := make([]string, 0, len(infos))
+	for _, info := range infos {
+		heading := info.Name
+		if heading == "" {
+			heading = info.File
+		}
+		detail := heading
+		meta := make([]string, 0, 2)
+		if info.Version != "" {
+			meta = append(meta, info.Version)
+		}
+		if info.Author != "" {
+			meta = append(meta, "by "+info.Author)
+		}
+		if len(meta) > 0 {
+			detail += " (" + strings.Join(meta, ", ") + ")"
+		}
+		if info.Description != "" {
+			detail += "\n  " + info.Description
+		}
+		lines = append(lines, detail)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func saveProjectDialog(w fyne.Window, engine *core.Engine, statusLabel *widget.Label, refresh func()) {
@@ -114,6 +136,8 @@ func saveProjectDialog(w fyne.Window, engine *core.Engine, statusLabel *widget.L
 			statusLabel.SetText(err.Error())
 			return
 		}
+		engine.AddRecentProject(path)
+		_ = engine.SaveWorkspace()
 		statusLabel.SetText("Saved " + path)
 		if refresh != nil {
 			refresh()
@@ -134,6 +158,8 @@ func loadProjectDialog(w fyne.Window, engine *core.Engine, statusLabel *widget.L
 			statusLabel.SetText(err.Error())
 			return
 		}
+		engine.AddRecentProject(path)
+		_ = engine.SaveWorkspace()
 		statusLabel.SetText("Loaded " + path)
 		if refresh != nil {
 			refresh()
@@ -175,6 +201,7 @@ func main() {
 	}
 	w := a.NewWindow("Daemon")
 	engine := core.NewEngine()
+	_ = engine.LoadWorkspace()
 	engine.LoadPlugins("plugins")
 	patternButtons := make([][]*widget.Button, engine.ChannelCount())
 	for i := range patternButtons {
@@ -184,15 +211,21 @@ func main() {
 	pluginLabel := widget.NewLabel(pluginListText(engine))
 	projectNameEntry := widget.NewEntry()
 	projectNameEntry.SetText(engine.ProjectName())
+	var playBtn, recordBtn, newPatternBtn *widget.Button
+	var patternSelect, recentSelect *widget.Select
+	var refreshUI func()
 	projectNameEntry.OnChanged = func(text string) {
 		engine.SetProjectName(text)
+		refreshUI()
 	}
 	tempoEntry := widget.NewEntry()
 	tempoEntry.SetText(strconv.Itoa(engine.Tempo()))
-	var playBtn, recordBtn, newPatternBtn *widget.Button
-	var patternSelect *widget.Select
-	refreshUI := func() {
+	refreshUI = func() {
 		refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel, pluginLabel)
+		if recentSelect != nil {
+			recentSelect.Options = engine.RecentProjects()
+			recentSelect.Refresh()
+		}
 	}
 	patternSelect = widget.NewSelect(engine.PatternNames(), func(s string) {
 		engine.SetPatternByName(s)
@@ -231,6 +264,7 @@ func main() {
 	tempoEntry.OnChanged = func(t string) {
 		if v, err := strconv.Atoi(t); err == nil {
 			engine.SetTempo(v)
+			refreshUI()
 		}
 	}
 	newPatternBtn = widget.NewButton("New Pattern", func() {
@@ -254,10 +288,23 @@ func main() {
 		engine.NewProject(projectNameEntry.Text, templateSelect.Selected)
 		refreshUI()
 	})
+	recentSelect = widget.NewSelect(engine.RecentProjects(), func(path string) {
+		if path == "" {
+			return
+		}
+		if err := engine.LoadProject(path); err != nil {
+			statusLabel.SetText(err.Error())
+			return
+		}
+		engine.AddRecentProject(path)
+		_ = engine.SaveWorkspace()
+		refreshUI()
+		projectNameEntry.SetText(engine.ProjectName())
+	})
 	channelColumns := container.NewHBox()
 	for ch := 0; ch < engine.ChannelCount(); ch++ {
 		channelColumns.Add(makeChannelColumn(engine, ch, patternButtons, func() {
-			refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel, pluginLabel)
+			refreshUI()
 		}))
 	}
 	pianoBtn := widget.NewButton("Piano Roll", func() {
@@ -266,15 +313,15 @@ func main() {
 	toolbar := container.NewHBox(playBtn, stopBtn, recordBtn, projectNameEntry, templateSelect, patternSelect)
 	actions := container.NewHBox(saveBtn, loadBtn, newPatternBtn, newProjectBtn, pianoBtn)
 	left := container.NewBorder(toolbar, actions, nil, nil, container.NewVScroll(channelColumns))
-	right := container.NewVBox(widget.NewLabel("Status"), statusLabel, widget.NewLabel("Plugin Metadata"), pluginLabel)
+	right := container.NewVBox(widget.NewLabel("Status"), statusLabel, widget.NewLabel("Plugin Metadata"), pluginLabel, widget.NewLabel("Recent Projects"), recentSelect)
 	content := container.NewHSplit(left, right)
 	w.SetContent(content)
 	w.Resize(fyne.NewSize(1400, 900))
-	refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel, pluginLabel)
+	refreshUI()
 	go func() {
 		ticker := time.NewTicker(300 * time.Millisecond)
 		for range ticker.C {
-			refreshPatternGrid(engine, patternButtons, patternSelect, tempoEntry, statusLabel, pluginLabel)
+			refreshUI()
 		}
 	}()
 

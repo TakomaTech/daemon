@@ -9,6 +9,7 @@ import (
     "os"
     "path/filepath"
     "plugin"
+    "strings"
     "sync"
     "time"
 
@@ -35,6 +36,8 @@ type Engine struct {
     mu             sync.Mutex
     plugins        []Plugin
     pluginFiles    []string
+    pluginInfos    []PluginInfo
+    recentProjects []string
     channels       []Channel
     channelPhases  []float64
     pianoPhases    []float64
@@ -59,6 +62,14 @@ type Plugin interface {
 type PluginFunc func([]float32) []float32
 
 func (f PluginFunc) Process(b []float32) []float32 { return f(b) }
+
+type PluginInfo struct {
+    File        string `json:"file"`
+    Name        string `json:"name"`
+    Description string `json:"description"`
+    Version     string `json:"version"`
+    Author      string `json:"author"`
+}
 
 type Action struct {
     Kind         string
@@ -391,7 +402,86 @@ func (e *Engine) NewProject(name, template string) {
 func (e *Engine) PluginNames() []string {
     e.mu.Lock()
     defer e.mu.Unlock()
-    return append([]string(nil), e.pluginFiles...)
+    names := make([]string, len(e.pluginInfos))
+    for i, info := range e.pluginInfos {
+        if info.Name != "" {
+            names[i] = info.Name
+        } else {
+            names[i] = info.File
+        }
+    }
+    return names
+}
+
+func (e *Engine) PluginInfos() []PluginInfo {
+    e.mu.Lock()
+    defer e.mu.Unlock()
+    infos := make([]PluginInfo, len(e.pluginInfos))
+    copy(infos, e.pluginInfos)
+    return infos
+}
+
+func (e *Engine) workspaceFilePath() string {
+    cwd, err := os.Getwd()
+    if err != nil {
+        cwd = "."
+    }
+    return filepath.Join(cwd, ".daemon_workspace.json")
+}
+
+func (e *Engine) SaveWorkspace() error {
+    e.mu.Lock()
+    workspace := Workspace{RecentProjects: append([]string(nil), e.recentProjects...)}
+    e.mu.Unlock()
+
+    data, err := json.MarshalIndent(workspace, "", "  ")
+    if err != nil {
+        return err
+    }
+    return os.WriteFile(e.workspaceFilePath(), data, 0644)
+}
+
+func (e *Engine) LoadWorkspace() error {
+    path := e.workspaceFilePath()
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return err
+    }
+    var workspace Workspace
+    if err := json.Unmarshal(data, &workspace); err != nil {
+        return err
+    }
+    e.mu.Lock()
+    e.recentProjects = append([]string(nil), workspace.RecentProjects...)
+    e.mu.Unlock()
+    return nil
+}
+
+func (e *Engine) AddRecentProject(path string) {
+    path = filepath.Clean(path)
+    e.mu.Lock()
+    defer e.mu.Unlock()
+    idx := -1
+    for i, p := range e.recentProjects {
+        if p == path {
+            idx = i
+            break
+        }
+    }
+    if idx >= 0 {
+        e.recentProjects = append(append([]string(nil), e.recentProjects[:idx]...), e.recentProjects[idx+1:]...)
+    }
+    e.recentProjects = append([]string{path}, e.recentProjects...)
+    if len(e.recentProjects) > 10 {
+        e.recentProjects = e.recentProjects[:10]
+    }
+}
+
+func (e *Engine) RecentProjects() []string {
+    e.mu.Lock()
+    defer e.mu.Unlock()
+    recents := append([]string(nil), e.recentProjects...)
+    return recents
 }
 
 func (e *Engine) SetTempo(bpm int) {
@@ -618,11 +708,37 @@ func (e *Engine) LoadPlugins(dir string) {
             if err != nil {
                 continue
             }
+            info := PluginInfo{File: f.Name(), Name: strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))}
             if proc, ok := sym.(func([]float32) []float32); ok {
                 e.mu.Lock()
                 e.plugins = append(e.plugins, PluginFunc(proc))
                 e.pluginFiles = append(e.pluginFiles, f.Name())
+                e.pluginInfos = append(e.pluginInfos, info)
                 e.mu.Unlock()
+            }
+            if metaSym, err := p.Lookup("Metadata"); err == nil {
+                if metaFunc, ok := metaSym.(func() map[string]string); ok {
+                    metadata := metaFunc()
+                    if metadata != nil {
+                        if v, ok := metadata["name"]; ok {
+                            info.Name = v
+                        }
+                        if v, ok := metadata["description"]; ok {
+                            info.Description = v
+                        }
+                        if v, ok := metadata["version"]; ok {
+                            info.Version = v
+                        }
+                        if v, ok := metadata["author"]; ok {
+                            info.Author = v
+                        }
+                        e.mu.Lock()
+                        if len(e.pluginInfos) > 0 {
+                            e.pluginInfos[len(e.pluginInfos)-1] = info
+                        }
+                        e.mu.Unlock()
+                    }
+                }
             }
         }
     }

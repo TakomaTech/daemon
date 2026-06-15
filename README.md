@@ -38,10 +38,18 @@ To build the C++ helper:
 make cpp
 ```
 
-To run:
+To run the GUI app:
 
 ```bash
 make run
 ```
 
-Project files use the .dmon extension
+To run in headless/container mode:
+
+```bash
+DAEMON_HEADLESS=1 make run
+```
+
+Project files use the .dmon extension.
+
+Recent projects and workspace state are saved to `.daemon_workspace.json` in the current directory. Plugin metadata is displayed in the UI when plugins expose a `Metadata()` symbol.

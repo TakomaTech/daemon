@@ -25,3 +25,7 @@ type Project struct {
     Patterns       []Pattern `json:"patterns"`
     PianoRoll      PianoRoll `json:"piano_roll"`
 }
+
+type Workspace struct {
+    RecentProjects []string `json:"recent_projects"`
+}

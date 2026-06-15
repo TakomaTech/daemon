@@ -18,5 +18,8 @@ cpp:
 run: build
 	./$(BINARY)
 
+run-headless: build
+	DAEMON_HEADLESS=1 ./$(BINARY)
+
 clean:
 	rm -f $(BINARY) plugins/example.so internal/cpp/engine.o internal/cpp/libengine.a
